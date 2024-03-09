@@ -1,0 +1,513 @@
+---
+title: "Finalproject302"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+The use of data analysis is attracting more attention from sports institutions. While countries and sports teams spend a lot of money on efforts in winning games, data analysis gives them reference on maximizing the efficiency with the costs(Sarlis & Tjortjis, 2020). In order to limit the gap of the wealth of teams' backgrounds, NBA punishes teams that exceed the salary cap by reducing their privileges in free agency and charging them with extra taxes(Wikipedia,2021). Also, the performance of players in each team directly shows whether they are worth such salaries. Therefore, by predicting players' performance, teams are able to increase their benefit from the investment in players. For example, the research by Pehar et al(2017) provides a model that uses a jump test for basketball players in a different position to predict their performance. Therefore, we aim to find a model to find out what are factors impact the performance of basketball players from other approaches in order to provide references for NBA basketball teams on their activities in free agency and trading. 
+
+# Method
+
+The main method we will explore is multiple linear regression(MLP). The MLP only works well when all the assumptions are held. Otherwise, the estimates and further analysis of the model will not be reliable. 
+The description of important variable in raw data is shown in table 1 in the appendix. Our dataset is from Kaggle. It included data corresponding to demographic variables and basic box score statistics of NBA players from season 1996-97 to season 2020-21. The dataset is updated on 02/08/2021 (Justinas, 2021). Since we are going to find out what are factors influence player's performance from the way they can benefit the team, the most appropriate response variable should be net rating which indicates the team's point differential per 100 possessions while the certain player is on the court (Justinas, 2021). 
+Furthermore, since we plan to generate a validation for our model, we first split our dataset into train data and test. Thus, we will use only train data until the validation section. 
+
+
+The structure of the Method selection follows:
+- Exploratory Data Analysis (EDA)
+- Starting model analyze
+- Model comparison
+- Model validation
+
+
+
+
+
+\newpage
+## EDA
+Figure 1
+```{r, include=FALSE}
+#load data and library used in the report
+#install.packages("car")
+#install.packages("patchwork")
+
+library(tidyverse)
+library(car)
+library(patchwork)
+
+data <- read.csv("sta302data.csv")
+
+
+
+# select train and test data
+set.seed(943)
+
+train <- data[sample(1:nrow(data), 5850, replace=F), ]
+test <- data[which(!(data$X %in% train$X)),]
+
+# check types
+str(train)
+
+
+```
+
+```{r, echo=FALSE, warning= FALSE, message=FALSE}
+# EDA
+# plots for individual related data
+plots_net_rating<- train %>% 
+  ggplot(aes(x=net_rating)) +
+  geom_histogram(bins=50, color='Black', fill='Blue')+
+  labs(title="Net rating")
+
+plots_playerheight<- train %>% 
+  ggplot(aes(x=player_height)) +
+  geom_histogram(color='Black', fill='Blue')+
+  labs(title="Player Height")
+
+plots_playerweight<- train %>% 
+  ggplot(aes(x=player_weight)) +
+  geom_histogram(color='Black', fill='Blue')+
+  labs(title="Player weight")
+
+plots_age<- train %>% 
+  ggplot(aes(x=age)) +
+  geom_histogram(color='Black', fill='Blue')+
+  labs(title="Age")
+
+(plots_net_rating|plots_playerheight)/(plots_playerweight|plots_age)
+
+# plots for performance related data
+scatter_oreb_pct <- train %>% 
+  ggplot(aes(x=oreb_pct, y= net_rating))+
+  geom_point()+
+  geom_smooth(se=FALSE, method="lm")
+
+scatter_dreb_pct <- train %>% 
+  ggplot(aes(x=dreb_pct, y= net_rating))+
+  geom_point()+
+  geom_smooth(se=FALSE, method="lm")
+
+scatter_usg_pct <- train %>% 
+  ggplot(aes(x=usg_pct, y= net_rating))+
+  geom_point()+
+  geom_smooth(se=FALSE, method="lm")
+
+scatter_ts_pct <- train %>% 
+  ggplot(aes(x=ts_pct, y= net_rating))+
+  geom_point()+
+  geom_smooth(se=FALSE, method="lm")
+
+scatter_ast_pct <- train %>% 
+  ggplot(aes(x=ast_pct, y= net_rating))+
+  geom_point()+
+  geom_smooth(se=FALSE, method="lm")
+
+(scatter_oreb_pct|scatter_dreb_pct|scatter_usg_pct)/ (scatter_ts_pct|scatter_ast_pct)
+```
+From figure 1, we can see the body data associated with players are various. Also, there is no observation that is shown unexpectedly. However, the net rating is highly concentrated around 0. Therefore, the variance of net rating in our dataset is not big which might make it our predictors hard to explain the prediction. We will find out whether it will be a problem later. With regard to scatterplots, we selected all the performance-related variables and see the relationship with our response variable net rating. The results show that there is some linear relationship between performance-related variables and net rating although the relationship seems not strong. 
+
+
+
+## Starting model analyze
+
+
+
+
+Figure 2
+```{r, echo =FALSE}
+# starting model
+model_1 <- lm(net_rating~ player_height+player_weight+age+oreb_pct+dreb_pct+usg_pct+ts_pct+ast_pct, data=train)
+
+# check multicollinearity
+vif(model_1)
+#check conditions
+##1
+y_hat <- fitted(model_1)
+y_i <- train$net_rating
+plot(y_hat,y_i, main = "Y vs predicted value Y_hat")
+
+##2
+pairs(~player_height+player_weight+age+oreb_pct+dreb_pct+usg_pct+ts_pct+ast_pct, data=train)
+
+```
+
+Figure 3
+
+```{r, echo =FALSE}
+# residual plots
+r <- resid(model_1)
+
+par(mfrow=c(2,2))
+
+plot(r ~ fitted(model_1), main ="Residuals vs fitted", xlab="fitted", ylab="res.")
+plot(r ~ train$player_height, main= "Residuals vs player_height", xlab="player_height", ylab="res")
+plot(r ~ train$player_weight, main= "Residuals vs player_weight", xlab="player_weight", ylab="res")
+plot(r ~ train$age, main= "Residuals vs age", xlab="age", ylab="res")
+plot(r ~ train$oreb_pct, main= "Residuals vs oreb_pct", xlab="oreb_pct", ylab="res")
+plot(r ~ train$dreb_pct, main= "Residuals vs dreb_pct", xlab="dreb_pct", ylab="res")
+plot(r ~ train$usg_pct, main= "Residuals vs usg_pct", xlab="usg_pct", ylab="res")
+plot(r ~ train$ts_pct, main= "Residuals vs ts_pct", xlab="ts_pct", ylab="res")
+plot(r ~ train$ast_pct, main= "Residuals vs ast_pct", xlab="ast_pct", ylab="res")
+
+
+qqnorm(r)
+qqline(r)
+```
+
+
+As Pehar et al.(2017) points out, the jumping ability might affacts basketball player's performance. Therefore, we have evidence to add variables that is related to physical condition of players into our model while the jumping ability seems to be variance among players with different physical conditions. For example, if the physical condition of one player is better than one the other, he might have better jumping ability. Moreover, the performance-related data might affect team's point differential on the court. For instance, "Oreb_pct" indicates the efficiency in grabbing offense rebound while the player is playing. Teams with more offense rebound typically have more opportunity to score. Therefore, our starting with the model(model 1): $$net\_rating \sim player\_height+player\_weight+age+oreb\_pct +dreb\_pct+usg\_pct+ts_pct+ast\_pct$$
+Also, we believe gp,reb, and ast is highly collinear with other performance-related data in our model. Thus, we choose not to include them in model 1. 
+After picking the starting model, we are going to ensure there is no multicollinearity in our model and check whether assumptions are held in this model if not we will apply a transformation to the model.
+The multicollinearity can cause wrong estimates of coefficients and might produce a large variance. So, we first check the multicollinearity through the variance inflation factor(VIF) of variables. Typically, we can conclude variables with VIF greater than 5 have strong multicollinearity. Fortunately, in our model, none of the variables has VIF greater than 5. 
+Then, we check whether our model have violations in assumptions through residual plots and Q-Q plot. The residual plots allows us to verify assumptions such as linearity, normality, constant variance, and uncorrelatedness while Q-Q plot is used to check normality. In addition, before checking the assumption, we have to make sure that our model is under two conditions. Otherwise, the results of residual plots are not able to show the true issues. Referring to figure 2, we can see a clear pattern between $y_i$ and predicted value $\hat{y}$ which satisfied the first condition. Also, there is no relationship other than the linear relationship between predictors which means condition 2 is met. Therefore we can use residual plots to check assumptions. 
+Based on figure 3, can see a bit triangle shapes in a few plots. Therefore, constant variance tend to be violated in our model. More importantly, there is a huge deviation from the straight diagonal string on two tails. Thus, the normality is also violated which means inference on the estimates is not reliable in our model. In consequence, we apply a transformation to the model.
+```{r, include= FALSE}
+# transformation
+# add 0.000001 to ensure coxbox works
+
+summary(powerTransform(cbind(train$player_height+0.00001,
+                             train$player_weight+0.00001,
+                             train$age+0.00001,
+                             train$oreb_pct+0.00001,
+                             train$dreb_pct+0.00001,
+                             train$usg_pct+0.00001,
+                             train$ts_pct+0.00001,
+                             train$ast_pct+0.00001)~1))
+
+# generate trans variables
+train <- train%>% mutate(player_height_trans = player_height^2,
+                         player_weight_trans = log(player_weight),
+                         age_trans = 1/sqrt(age),
+                         oreb_pct_trans = sqrt(oreb_pct),
+                         dreb_pct_trans = sqrt(dreb_pct),
+                         usg_pct_trans = sqrt(usg_pct),
+                         ast_pct_trans = sqrt(ast_pct))
+
+```
+
+```{r, include=FALSE}
+
+
+# generate a new mode
+model_2 <- lm(net_rating ~ player_height_trans+player_weight_trans+age_trans+oreb_pct_trans+dreb_pct_trans+usg_pct_trans+ts_pct+ast_pct_trans, data=train)
+
+#check conditions
+##1
+y_hat <- fitted(model_2)
+y_i <- train$net_rating
+plot(y_hat,y_i, main = "Y vs predicted value Y_hat")
+
+##2
+pairs(~player_height_trans+player_weight_trans+age_trans+oreb_pct_trans+dreb_pct_trans+usg_pct_trans+ts_pct+ast_pct_trans, data=train)
+
+
+
+
+```
+Figure 4
+
+
+```{r, echo=FALSE}
+# residual plots
+r <- resid(model_2)
+
+par(mfrow=c(2,2))
+
+plot(r ~ fitted(model_2), main ="Residuals vs fitted", xlab="fitted", ylab="res.")
+plot(r ~ train$player_height_trans, main= "Residuals vs player_height_trans", xlab="player_height", ylab="res")
+plot(r ~ train$player_weight_trans, main= "Residuals vs player_weight_trans", xlab="player_weight", ylab="res")
+plot(r ~ train$age_trans, main= "Residuals vs age_trans", xlab="age", ylab="res")
+plot(r ~ train$oreb_pct_trans, main= "Residuals vs oreb_pct_trans", xlab="oreb_pct", ylab="res")
+plot(r ~ train$dreb_pct_trans, main= "Residuals vs dreb_pct_trans", xlab="dreb_pct", ylab="res")
+plot(r ~ train$usg_pct_trans, main= "Residuals vs usg_pct_trans", xlab="usg_pct", ylab="res")
+plot(r ~ train$ts_pct, main= "Residuals vs ts_pct", xlab="ts_pct", ylab="res")
+plot(r ~ train$ast_pct_trans, main= "Residuals vs ast_pct_trans", xlab="ast_pct", ylab="res")
+qqnorm(r)
+qqline(r)
+```
+While we use power transformation, we can only apply transformation on predictors while our respond variable has negative elements which means we are not able meet constant variance and normality. Overall, our model becomes(model 2): $$net\_rating \sim player\_height^2+ln(player\_weight)+\frac{1}{\sqrt{age}}+\sqrt{oreb\_pct} +\sqrt{dreb\_pct}+\sqrt{usg\_pct}+ts_pct+\sqrt{ast\_pct}$$
+Overall, as shown in figure 3, the violation of normality is not fixed as expected. More importantly, the clusters in the residual plots are more clear after transformation.
+
+
+## Model comparison
+
+```{r, include=FALSE}
+model_3 <- lm(net_rating~ .-X-player_name-team_abbreviation-college-draft_year-draft_number-season-draft_round-country, data=train)
+
+vif(lm(net_rating~ .-X-player_name-team_abbreviation-college-draft_year-draft_number-season-draft_round-country, data=train))
+#check conditions
+##1
+y_hat <- fitted(model_3)
+y_i <- train$net_rating
+plot(y_hat,y_i, main = "Y vs predicted value Y_hat")
+
+##2
+pairs(~gp+pts+reb+ast+player_height+player_weight+age+oreb_pct+dreb_pct+usg_pct+ts_pct+ast_pct, data=train)
+
+# residual plots
+r <- resid(model_3)
+
+
+
+plot(r ~ fitted(model_3), main ="Residuals vs fitted", xlab="fitted", ylab="res.")
+plot(r ~ train$gp, main ="Residuals vs gp", xlab="gp", ylab="res.")
+plot(r ~ train$pts, main ="Residuals vs pts", xlab="pts", ylab="res.")
+plot(r ~ train$reb, main ="Residuals vs reb", xlab="reb", ylab="res.")
+plot(r ~ train$ast, main ="Residuals vs ast", xlab="ast", ylab="res.")
+plot(r ~ train$player_height, main= "Residuals vs player_height", xlab="player_height", ylab="res")
+plot(r ~ train$player_weight, main= "Residuals vs player_weight", xlab="player_weight", ylab="res")
+plot(r ~ train$age, main= "Residuals vs age", xlab="age", ylab="res")
+plot(r ~ train$oreb_pct, main= "Residuals vs oreb_pct", xlab="oreb_pct", ylab="res")
+plot(r ~ train$dreb_pct, main= "Residuals vs dreb_pct", xlab="dreb_pct", ylab="res")
+plot(r ~ train$usg_pct, main= "Residuals vs usg_pct", xlab="usg_pct", ylab="res")
+plot(r ~ train$ts_pct, main= "Residuals vs ts_pct", xlab="ts_pct", ylab="res")
+plot(r ~ train$ast_pct, main= "Residuals vs ast_pct", xlab="ast_pct", ylab="res")
+qqnorm(r)
+qqline(r)
+
+
+```
+
+Surprisingly, we do not have any multicollinearity problem in model 3 with all the performance-related data which is against our hypothesis on model 1. While our model does no meet all the assumptions and the standard error is really high. We generate a model with more variables to compare(model 3): $$net\_rating \sim gp+pts+reb+ast+player\_height+player\_weight+age+oreb\_pct +dreb\_pct+usg\_pct+ts_pct+ast\_pct$$
+We also apply the same training process to the model. However, the result shows that we still have the same issues. Again, we are unable to fix the issues in normality by power transformation. Therefore, we will only take the tree models above to do validation while the linearity looks good from the residual plots.
+
+## Model validation
+In order to find out whether our models are overfitting the train data, we use a test dataset to validate our models by comparing their coefficients and see if new violations of assumptions are made in test data. Basically, we use apply same transformation to the variable and generate models with same predictors that we had been disscussing previously.
+```{r, include=FALSE}
+# starting model
+model_1_test <- lm(net_rating~ player_height+player_weight+age+oreb_pct+dreb_pct+usg_pct+ts_pct+ast_pct, data=test)
+
+# check multicollinearity
+vif(model_1_test)
+#check conditions
+##1
+y_hat <- fitted(model_1_test)
+y_i <- test$net_rating
+plot(y_hat,y_i, main = "Y vs predicted value Y_hat")
+
+##2
+pairs(~player_height+player_weight+age+oreb_pct+dreb_pct+usg_pct+ts_pct+ast_pct, data=test)
+
+
+
+
+# residual plots
+r <- resid(model_1_test)
+
+par(mfrow=c(3,4))
+
+plot(r ~ fitted(model_1_test), main ="Residuals vs fitted", xlab="fitted", ylab="res.")
+plot(r ~ test$player_height, main= "Residuals vs player_height", xlab="player_height", ylab="res")
+plot(r ~ test$player_weight, main= "Residuals vs player_weight", xlab="player_weight", ylab="res")
+plot(r ~ test$age, main= "Residuals vs age", xlab="age", ylab="res")
+plot(r ~ test$oreb_pct, main= "Residuals vs oreb_pct", xlab="oreb_pct", ylab="res")
+plot(r ~ test$dreb_pct, main= "Residuals vs dreb_pct", xlab="dreb_pct", ylab="res")
+plot(r ~ test$usg_pct, main= "Residuals vs usg_pct", xlab="usg_pct", ylab="res")
+plot(r ~ test$ts_pct, main= "Residuals vs ts_pct", xlab="ts_pct", ylab="res")
+plot(r ~ test$ast_pct, main= "Residuals vs ast_pct", xlab="ast_pct", ylab="res")
+qqnorm(r)
+qqline(r)
+
+
+
+
+
+# transformation
+# add 0.000001 to ensure coxbox works
+
+summary(powerTransform(cbind(test$player_height+0.00001,
+                             test$player_weight+0.00001,
+                             test$age+0.00001,
+                             test$oreb_pct+0.00001,
+                             test$dreb_pct+0.00001,
+                             test$usg_pct+0.00001,
+                             test$ts_pct+0.00001,
+                             test$ast_pct+0.00001)~1))
+
+# generate trans variables
+test <- test%>% mutate(player_height_trans = player_height^2,
+                         player_weight_trans = log(player_weight),
+                         age_trans = 1/sqrt(age),
+                         oreb_pct_trans = sqrt(oreb_pct),
+                         dreb_pct_trans = sqrt(dreb_pct),
+                         usg_pct_trans = sqrt(usg_pct),
+                         ast_pct_trans = sqrt(ast_pct))
+
+```
+
+
+```{r, include=FALSE}
+
+
+# generate a new mode
+model_2_test <- lm(net_rating ~ player_height_trans+player_weight_trans+age_trans+oreb_pct_trans+dreb_pct_trans+usg_pct_trans+ts_pct+ast_pct_trans, data=test)
+
+#check conditions
+##1
+y_hat <- fitted(model_2_test)
+y_i <- test$net_rating
+plot(y_hat,y_i, main = "Y vs predicted value Y_hat")
+
+##2
+pairs(~player_height_trans+player_weight_trans+age_trans+oreb_pct_trans+dreb_pct_trans+usg_pct_trans+ts_pct+ast_pct_trans, data=test)
+
+# residual plots
+r <- resid(model_2_test)
+
+par(mfrow=c(3,4))
+
+plot(r ~ fitted(model_2_test), main ="Residuals vs fitted", xlab="fitted", ylab="res.")
+plot(r ~ test$player_height_trans, main= "Residuals vs player_height_trans", xlab="player_height", ylab="res")
+plot(r ~ test$player_weight_trans, main= "Residuals vs player_weight_trans", xlab="player_weight", ylab="res")
+plot(r ~ test$age_trans, main= "Residuals vs age_trans", xlab="age", ylab="res")
+plot(r ~ test$oreb_pct_trans, main= "Residuals vs oreb_pct_trans", xlab="oreb_pct", ylab="res")
+plot(r ~ test$dreb_pct_trans, main= "Residuals vs dreb_pct_trans", xlab="dreb_pct", ylab="res")
+plot(r ~ test$usg_pct_trans, main= "Residuals vs usg_pct_trans", xlab="usg_pct", ylab="res")
+plot(r ~ test$ts_pct, main= "Residuals vs ts_pct", xlab="ts_pct", ylab="res")
+plot(r ~ test$ast_pct_trans, main= "Residuals vs ast_pct_trans", xlab="ast_pct", ylab="res")
+qqnorm(r)
+qqline(r)
+```
+```{r, include=FALSE}
+model_3_test <- lm(net_rating~ .-X-player_name-team_abbreviation-college-draft_year-draft_number-season-draft_round-country, data=test)
+
+vif(lm(net_rating~ .-X-player_name-team_abbreviation-college-draft_year-draft_number-season-draft_round-country, data=test))
+#check conditions
+##1
+y_hat <- fitted(model_3_test)
+y_i <- test$net_rating
+plot(y_hat,y_i, main = "Y vs predicted value Y_hat")
+
+##2
+pairs(~gp+pts+reb+ast+player_height+player_weight+age+oreb_pct+dreb_pct+usg_pct+ts_pct+ast_pct, data=test)
+
+# residual plots
+r <- resid(model_3_test)
+
+
+
+plot(r ~ fitted(model_3_test), main ="Residuals vs fitted", xlab="fitted", ylab="res.")
+plot(r ~ test$gp, main ="Residuals vs gp", xlab="gp", ylab="res.")
+plot(r ~ test$pts, main ="Residuals vs pts", xlab="pts", ylab="res.")
+plot(r ~ test$reb, main ="Residuals vs reb", xlab="reb", ylab="res.")
+plot(r ~ test$ast, main ="Residuals vs ast", xlab="ast", ylab="res.")
+plot(r ~ test$player_height, main= "Residuals vs player_height", xlab="player_height", ylab="res")
+plot(r ~ test$player_weight, main= "Residuals vs player_weight", xlab="player_weight", ylab="res")
+plot(r ~ test$age, main= "Residuals vs age", xlab="age", ylab="res")
+plot(r ~ test$oreb_pct, main= "Residuals vs oreb_pct", xlab="oreb_pct", ylab="res")
+plot(r ~ test$dreb_pct, main= "Residuals vs dreb_pct", xlab="dreb_pct", ylab="res")
+plot(r ~ test$usg_pct, main= "Residuals vs usg_pct", xlab="usg_pct", ylab="res")
+plot(r ~ test$ts_pct, main= "Residuals vs ts_pct", xlab="ts_pct", ylab="res")
+plot(r ~ test$ast_pct, main= "Residuals vs ast_pct", xlab="ast_pct", ylab="res")
+qqnorm(r)
+qqline(r)
+
+
+```
+All analysis for this report was programmed using `R version 4.0.2` with R package Tidyverse(Wickham et al., 2021), huxtable(Hugh-Jones, 2021), car(John  et al., 2021), and patchwork(Pedersen, 2020). 
+
+# Result
+Figure 4
+```{r, include= FALSE}
+# install.pakages("huxtable")
+huxtable::huxreg(model_1,model_1_test,model_2,model_2_test,model_3,model_3_test)
+```
+The results from the models are performed in figure 5. Every two rows show the results of model 1 on train data and test data. The estimates for coefficients are close in model 1 while there is a huge gap in model 2 and model 3. Although the assumption violation is the main issue among models, there are no additional violations invalidation. From the perspective of the explanatory power of models, model 3 has the highest $R^2$ which means the true variance explained by model 3 is the most. With regards to AIC, we typically preferred a model with low AIC which means model 3 is also the best choice from the perspective of AIC.
+Overall, we tend to take model 1 as our final model because there are no significant differences in $R^2$ and AIC between models while the differences in estimates of model 2 and model 3 between train data and test data are significantly large. 
+ 
+# Disscussion
+We still can generate some important results. The estimates for coefficients of player_weight, age, oreb_pct, usg_pct,ts_pct, and ast_pct are statistically significant which means these are the vriables that are more possible to have impact on net_rating. Thus, we successfully find out a possible  answer to our research question. Also, some results are reasonable. For example, the estimates for usg_pct means with one unit increase in percentage of the player uses the ball the predicted net rating of the player will decrease by 16.106. It is possible because efficiency of using ball might increase with decreasing in usage of the ball. 
+```{r, include=FALSE}
+which(cooks.distance(model_1)>qf(0.5, 9, 5850-9))
+which(abs(dffits(model_1)) > 2*sqrt(9/5850))
+which(cooks.distance(model_1_test)>qf(0.5, 9, 5850-9))
+which(abs(dffits(model_1_test)) > 2*sqrt(9/5850))
+
+which(cooks.distance(model_2)>qf(0.5, 9, 5850-9))
+which(abs(dffits(model_2)) > 2*sqrt(9/5850))
+which(cooks.distance(model_2_test)>qf(0.5, 9, 5850-9))
+which(abs(dffits(model_2_test)) > 2*sqrt(9/5850))
+
+which(cooks.distance(model_3)>qf(0.5, 14, 5850-14))
+which(abs(dffits(model_3)) > 2*sqrt(13/5850))
+which(cooks.distance(model_3_test)>qf(0.5, 14, 5850-14))
+which(abs(dffits(model_3_test)) > 2*sqrt(14/5850))
+```
+
+However, the limitation significantly affects the reliability of this report. One is that the number of influential points is significantly huge among all models in both train and test data. Therefore, it might cause the differences in estimates in train and test data. Therefore, the results of validation might not be precise. Also, eventhough we choose model 1 as final model, the estimates might also be bias. First, none of the violations in assumption is fixed by the power transformation. Therefore, not only estimates but also inference are not reliable. Also, $R^2$ is only 0.132 in our final model. Therefore, amount of variances that could be explained by our model is limited. One possible reasone why we fail to generate a good model is that our data includes all the players played in the NBA which means those who only played few games can also appear in the sample. More importantly, while only top players can play in the league for a long period of time, the number of these observation tends to large. Consequently, our sample data is not credible in doing such research. In order to fix this problem, we might find a way to clear out these players and do research only on top players. For example, Sarlis & Tjortjis (2020) only analyses data on top players. 
+
+# Reference
+
+Sarlis, V., &amp; Tjortjis, C. (2020). Sports analytics —&nbsp;evaluation of basketball players and Team Performance. Information Systems, 93, 101562. https://doi.org/10.1016/j.is.2020.101562 
+
+Wikimedia Foundation. (2021, December 7). NBA salary cap. Wikipedia. Retrieved December 7, 2021, from https://en.wikipedia.org/wiki/NBA_salary_cap.
+
+Justinas, Cirtautas.(2021). NBA Players: Biometric, biographic and basic box score features from 1996 to 2019 season. *Kaggle* Retrieved From [https://www.kaggle.com/justinas/nba-players-data](https://www.kaggle.com/justinas/nba-players-data)
+
+Pehar, M., Sekulic, D., Sisic, N., Spasic, M., Uljevic, O.,  & Krolo, A. et al. (2017). Evaluation of different jumping tests in defining position-specific and performance-level differences in high level basketball players. Biology of Sport, 34(3), 263-272. https://doi.org/10.5114/biolsport.2017.67122
+
+Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686,
+  https://doi.org/10.21105/joss.01686
+
+Huge-Jones, D., (2021). huxtable: Easily Create and Style Tables for LaTeX, HTML and Other Formats, https://hughjonesd.github.io/huxtable/
+
+Fox, J., Weisberg, S., and Price, Brad.(2021). car: Companion to Applied Regression, https://CRAN.R-project.org/package=car
+
+Perdersen Lin, T.(2020). patchwork: The Composer of Plots, https://patchwork.data-imaginist.com
+
+# Appendix
+Table 1
+
+Variables|Description|Type
+----|-----|------
+net_rating|Point differences while the player is on the court(OTC) per 100 possessions|Response
+gp|game played per season|Performance-related
+pts| Score points per game|Performance-related
+reb| Rebound per game|Performance-related
+ast|assistant per game|Performance-related
+player_height| height of the player|Body data
+player_weight| Weight of the player|Body data
+age|age of the player|Body data
+oreb_pct|offensive rebound rate while the player is OTC|Performance-related
+dreb_pct|defensive rebound rate while the player is OTC|Performance-related
+usg_pct| the usage of ball by the player while he is OTC|Performance-related
+ts_pct| shooting efficiency of the player while he is OTC|Performance-related
+ast_pct|assisted goal rate while the player is OTC|Performance-related
+
+
+Table 2
+```{r, echo=FALSE}
+train_selected <- train%>%select(net_rating,gp,pts,reb,ast,player_height,player_weight,age,oreb_pct,dreb_pct,usg_pct,ts_pct,ast_pct)
+test_selected <- test%>%select(net_rating,gp,pts,reb,ast,player_height,player_weight,age,oreb_pct,dreb_pct,usg_pct,ts_pct,ast_pct)
+mtr <- apply(train_selected[,], 2, mean)
+sdtr <- apply(train_selected[,], 2, sd)
+
+mtest <- apply(test_selected[,], 2, mean)
+sdtest <- apply(test_selected[,], 2, sd)
+```
+Variable | mean (s.d.) in training | mean (s.d.) in test
+---------|-------------------------|--------------------
+`r names(train_selected)[1]` | `r round(mtr[1], 3)` (`r round(sdtr[1], 3)`) | `r round(mtest[1], 3)` (`r round(sdtest[1], 3)`)
+`r names(train_selected)[2]` | `r round(mtr[2],3)` (`r round(sdtr[2],3)`) | `r round(mtest[2],3)` (`r round(sdtest[2],3)`)
+`r names(train_selected)[3]` | `r round(mtr[3],3)` (`r round(sdtr[3],3)`) | `r round(mtest[3],3)` (`r round(sdtest[3],3)`)
+`r names(train_selected)[4]` | `r round(mtr[4],3)` (`r round(sdtr[4],3)`) | `r round(mtest[4],3)` (`r round(sdtest[4],3)`)
+`r names(train_selected)[5]` | `r round(mtr[5],3)` (`r round(sdtr[5],3)`) | `r round(mtest[5],3)` (`r round(sdtest[5],3)`)
+`r names(train_selected)[6]` | `r round(mtr[6],3)` (`r round(sdtr[6],3)`) | `r round(mtest[6],3)` (`r round(sdtest[6],3)`)
+`r names(train_selected)[7]` | `r round(mtr[7],3)` (`r round(sdtr[7],3)`) | `r round(mtest[7],3)` (`r round(sdtest[7],3)`)
+`r names(train_selected)[8]` | `r round(mtr[8],3)` (`r round(sdtr[8],3)`) | `r round(mtest[8],3)` (`r round(sdtest[8],3)`)
+`r names(train_selected)[9]` | `r round(mtr[9],3)` (`r round(sdtr[9],3)`) | `r round(mtest[9],3)` (`r round(sdtest[9],3)`)
+`r names(train_selected)[10]` | `r round(mtr[10],3)` (`r round(sdtr[10],3)`) | `r round(mtest[10],3)` (`r round(sdtest[10],3)`)
+`r names(train_selected)[11]` | `r round(mtr[11],3)` (`r round(sdtr[11],3)`) | `r round(mtest[11],3)` (`r round(sdtest[11],3)`)
+`r names(train_selected)[12]` | `r round(mtr[12],3)` (`r round(sdtr[12],3)`) | `r round(mtest[12],3)` (`r round(sdtest[12],3)`)
+`r names(train_selected)[13]` | `r round(mtr[13],3)` (`r round(sdtr[13],3)`) | `r round(mtest[13],3)` (`r round(sdtest[13],3)`)
+
+
+
+
+
